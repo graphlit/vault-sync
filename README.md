@@ -162,6 +162,34 @@ Suggested prompt:
 The Vault is a local folder of Markdown files. Read README.md first. Ignore hidden control folders like .git, .zine, .dossium, .graphlit, .claude, and .codex. Use normal file tools to search and read the Markdown files.
 ```
 
+## Optional: Search Companion With QMD
+
+[QMD](https://github.com/tobi/qmd) is a local search companion for folders full of Markdown. Vault Sync and QMD fit together well:
+
+- Vault Sync keeps the Vault Git repository current on disk.
+- QMD can make the synced Markdown easier to search.
+- Your agent can still open the actual files whenever it needs the full source.
+
+The workflow is simple: sync the Vault first, then let QMD search the local folder. Install QMD separately, then add the local Vault folder:
+
+```bash
+npm install -g @tobilu/qmd
+
+vault-sync pull ~/Vaults/my-vault
+qmd collection add ~/Vaults/my-vault --name my-vault --mask "**/*.md"
+qmd context add qmd://my-vault "Local Vault synced by Vault Sync"
+qmd embed
+```
+
+Then agents can use QMD as an optional search helper:
+
+```bash
+qmd query "customer escalation patterns" -c my-vault --json -n 10
+qmd get "path/from/result.md" --full
+```
+
+QMD is not required. Vault Sync does not install, configure, or depend on QMD; it just keeps the local files fresh so tools like QMD can use them.
+
 ## Keeping It Fresh
 
 Pull updates manually:

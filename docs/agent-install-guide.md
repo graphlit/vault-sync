@@ -152,6 +152,34 @@ Use the local Vault in ~/Vaults/<name>. Read README.md first. Ignore hidden cont
 
 The agent can use `ls`, `rg`, `sed`, `cat`, and native file reads. Vault Sync should only be used to initialize, pull, check status, schedule pulls, or run diagnostics.
 
+## Optional: Search Companion With QMD
+
+[QMD](https://github.com/tobi/qmd) can make a synced Vault folder easier to search. The roles are separate:
+
+- Vault Sync handles Git clone, pull, status, schedule, and diagnostics.
+- QMD searches the local Markdown files after they exist on disk.
+- The agent should use QMD to find likely files, then open the files directly when it needs the full source.
+
+If QMD is installed, add the Vault folder as a collection:
+
+```bash
+vault-sync pull ~/Vaults/<name>
+qmd collection add ~/Vaults/<name> --name <name> --mask "**/*.md"
+qmd context add qmd://<name> "Local Vault synced by Vault Sync"
+qmd embed
+```
+
+Useful QMD commands for agents:
+
+```bash
+qmd search "<keywords>" -c <name> --json -n 10
+qmd vsearch "<natural-language question>" -c <name> --json -n 10
+qmd query "<research question>" -c <name> --json -n 10
+qmd get "path/from/result.md" --full
+```
+
+QMD is optional. Do not install or require it unless the user asks for a stronger local search companion.
+
 ## Validation Checklist
 
 After setup, run:

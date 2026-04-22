@@ -32,4 +32,4 @@ sed -n '1,160p' <file>
 - Do not call app APIs for Vault consumption.
 - Do not use `vault-sync` for search, query, read, summarize, rank, or index.
 - Do not edit generated Vault files unless the user explicitly asks for local modifications.
-- If QMD is installed and already configured for the Vault folder, it can be an optional local index. Do not require it.
+- If QMD is installed, it can be an optional local search helper. Add the Vault folder with `qmd collection add <path> --name <name> --mask "**/*.md"`, add context with `qmd context add qmd://<name> "Local Vault synced by Vault Sync"`, then run `qmd embed`. Use QMD to find likely files and local file reads for the full source. Do not require QMD.

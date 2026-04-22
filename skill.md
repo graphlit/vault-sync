@@ -47,4 +47,16 @@ vault-sync pull <path>
 4. Use ordinary filesystem tools: `ls`, `rg`, `sed`, `cat`, and native file reads.
 5. Treat the Vault as read-only unless the user explicitly asks to edit local files.
 
+## Optional QMD Search Companion
+
+If QMD is installed and the user wants a stronger local search helper, add the synced Vault folder as a QMD collection:
+
+```bash
+qmd collection add <path> --name <name> --mask "**/*.md"
+qmd context add qmd://<name> "Local Vault synced by Vault Sync"
+qmd embed
+```
+
+Use QMD to find likely files; use file reads for the full source.
+
 Vault Sync is the mirror. The agent is the reader.
