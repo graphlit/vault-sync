@@ -1,24 +1,39 @@
 # OpenClaw Install
 
-Use this when your Zine or Dossium Vault is stored in Git and OpenClaw can access your local filesystem.
+Use this when a Vault already exists in Git and OpenClaw can access your local filesystem.
 
-1. Clone Vault Sync.
-2. Install the `vault-sync` script on your `PATH`.
+## Preferred: Skill Entry
+
+If OpenClaw can install agent skills from GitHub, install:
+
+```bash
+npx skills add graphlit/vault-sync --skill vault-sync-setup
+npx skills add graphlit/vault-sync --skill vault-sync-use
+```
+
+If it uses direct skill URLs, point it at:
+
+```text
+https://raw.githubusercontent.com/graphlit/vault-sync/main/skill.md
+```
+
+Then ask OpenClaw:
+
+```text
+Set up Vault Sync for my Vault from <your-vault-repo-url>.
+```
+
+OpenClaw should install `vault-sync`, initialize the local folder, run `vault-sync doctor`, and ask before installing a recurring pull schedule.
+
+## Manual Fallback
 
 ```bash
 git clone https://github.com/graphlit/vault-sync
 cd vault-sync
 install -m 0755 bin/vault-sync ~/.local/bin/vault-sync
-```
 
-3. Sync your Vault repository from Zine or Dossium:
-
-```bash
 vault-sync init <your-vault-repo-url> ~/Vaults/<name>
 vault-sync schedule install ~/Vaults/<name> --every 5m
 ```
 
-4. Configure OpenClaw to work from the local Vault folder, such as `~/Vaults/<name>`.
-5. Ask OpenClaw to read `README.md` first, then inspect Markdown files directly.
-
-OpenClaw can manage the recurring pull schedule, but the scheduled action should still only run `vault-sync pull <path>`.
+After setup, OpenClaw should read `README.md` in the local Vault first, ignore hidden control folders, and inspect Markdown files directly with normal filesystem tools.

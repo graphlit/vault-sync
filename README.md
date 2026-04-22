@@ -1,12 +1,12 @@
 # Vault Sync
 
-Vault Sync keeps a Zine or Dossium Vault synced to your computer.
+Vault Sync keeps a Vault Git repository synced to your computer.
 
-A Vault is a Git repository of Markdown files: notes, source material, transcripts, summaries, observations, and other context exported from Zine or Dossium. Vault Sync keeps those files fresh locally so AI tools can read them without needing a live app connection.
+A Vault is a Git repository of Markdown files: notes, source material, transcripts, summaries, observations, and other context exported from your app. Vault Sync keeps those files fresh locally so AI tools can read them without needing a live app connection.
 
 ## Who It Helps
 
-Zine users can keep personal knowledge available to local AI tools:
+Personal knowledge Vaults can keep everyday context available to local AI tools:
 
 - students with lecture notes, readings, and research papers
 - researchers cross-referencing papers, citations, and notes
@@ -16,7 +16,7 @@ Zine users can keep personal knowledge available to local AI tools:
 - hobbyists and makers collecting tutorials, references, and project logs
 - writers working across drafts, research, notes, and source material
 
-Dossium users can keep team and business context available locally:
+Team and business Vaults can keep operational context available locally:
 
 - engineering and product teams reviewing incident context and feature history
 - account executives preparing for calls and relationship updates
@@ -36,7 +36,7 @@ Dossium users can keep team and business context available locally:
 ## What It Does Not Do
 
 - does not create or manage your Vault
-- does not call back to Zine or Dossium
+- does not call back to the app that generated the Vault
 - does not search, chat, summarize, rank, or index
 - does not edit generated Vault files
 - does not push changes back to the Vault repository
@@ -52,6 +52,42 @@ Vault Sync currently supports:
 - WSL2 Ubuntu and similar WSL2 Linux distributions
 
 Native Windows PowerShell and Command Prompt usage are not currently supported. If you use Windows, run Vault Sync inside WSL2 and keep the Vault under the WSL filesystem, such as `~/Vaults/<name>`, especially when your AI tool also runs in WSL2.
+
+## Agent-First Install
+
+Vault Sync is designed so an AI agent can set up the local mirror with your approval. You provide the Vault repository URL from your app; the agent installs the small `vault-sync` script, clones the repository, and optionally configures a recurring pull schedule.
+
+If your agent supports skill installation from GitHub, install the setup and usage skills:
+
+```bash
+npx skills add graphlit/vault-sync --skill vault-sync-setup
+npx skills add graphlit/vault-sync --skill vault-sync-use
+```
+
+Then ask your agent:
+
+```text
+Set up Vault Sync for my Vault at <your-vault-repo-url>.
+```
+
+For agents that support direct skill URLs, point them at:
+
+```text
+https://raw.githubusercontent.com/graphlit/vault-sync/main/skill.md
+```
+
+App-hosted skill entrypoints can also be served at:
+
+```text
+https://www.zine.ai/skill.md
+https://www.dossium.ai/skill.md
+```
+
+Codex can also consume this repository as a plugin marketplace:
+
+```bash
+codex plugin marketplace add graphlit/vault-sync
+```
 
 ## Install
 
@@ -71,7 +107,7 @@ bash bin/vault-sync status ~/Vaults/my-vault
 
 ## Quick Start
 
-Use the Vault repository URL from Zine or Dossium:
+Use the Vault repository URL from your app:
 
 ```bash
 vault-sync init <your-vault-repo-url> ~/Vaults/my-vault
@@ -172,6 +208,8 @@ See:
 - [Claude Code](examples/install-claude-code.md)
 - [Codex](examples/install-codex.md)
 - [OpenClaw](examples/install-openclaw.md)
+
+These examples are intentionally focused on agent setup and consumption. Vault creation and management stay in the app that generated the Vault.
 
 ## Development
 

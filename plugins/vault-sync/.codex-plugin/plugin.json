@@ -1,0 +1,31 @@
+{
+  "name": "vault-sync",
+  "version": "0.1.0",
+  "description": "Install and use Vault Sync for filesystem-based Vault consumption.",
+  "author": {
+    "name": "Graphlit",
+    "url": "https://github.com/graphlit/vault-sync"
+  },
+  "homepage": "https://github.com/graphlit/vault-sync",
+  "repository": "https://github.com/graphlit/vault-sync",
+  "license": "MIT",
+  "keywords": [
+    "vault",
+    "git",
+    "sync",
+    "filesystem",
+    "agent"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Vault Sync",
+    "shortDescription": "Mirror Vault Git repositories locally.",
+    "longDescription": "Vault Sync helps Codex install a small Git-based sync script, mirror an existing Vault to local Markdown files, and consume those files with normal filesystem tools.",
+    "developerName": "Graphlit",
+    "category": "Productivity",
+    "defaultPrompt": [
+      "Set up Vault Sync for my Vault.",
+      "Use my local Vault folder to answer this."
+    ]
+  }
+}
