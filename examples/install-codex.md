@@ -9,7 +9,7 @@ This path requires Codex CLI `0.121.0` or newer.
 Add the Vault Sync marketplace:
 
 ```bash
-codex marketplace add graphlit/vault-sync
+codex plugin marketplace add graphlit/vault-sync
 ```
 
 Then ask Codex:
