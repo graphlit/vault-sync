@@ -35,6 +35,13 @@ Add the Vault Sync marketplace:
 codex plugin marketplace add graphlit/vault-sync
 ```
 
+After install, use the marketplace name `graphlit-vault-sync` for maintenance:
+
+```bash
+codex plugin marketplace upgrade graphlit-vault-sync
+codex plugin marketplace remove graphlit-vault-sync
+```
+
 Then ask Codex:
 
 ```text

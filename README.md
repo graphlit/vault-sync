@@ -89,6 +89,13 @@ Codex CLI `0.121.0` or newer can also consume this repository as a plugin market
 codex plugin marketplace add graphlit/vault-sync
 ```
 
+After install, Codex refers to the marketplace by the name in this repo's metadata:
+
+```bash
+codex plugin marketplace upgrade graphlit-vault-sync
+codex plugin marketplace remove graphlit-vault-sync
+```
+
 ## Install
 
 Clone this repository and install the script somewhere on your `PATH`:
