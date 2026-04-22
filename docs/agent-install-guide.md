@@ -5,7 +5,7 @@ This guide explains how to make Vault Sync available to Codex, Claude Code, and 
 ## What You Need
 
 - A Vault Git repository URL.
-- A local destination folder, such as `~/Vaults/my-vault`.
+- A local destination folder, such as `~/vaults/my-vault`.
 - macOS, Linux, or WSL2.
 - Git authentication already set up for the Vault repository.
 
@@ -133,15 +133,15 @@ git clone https://github.com/graphlit/vault-sync
 cd vault-sync
 install -m 0755 bin/vault-sync ~/.local/bin/vault-sync
 
-vault-sync init <your-vault-repo-url> ~/Vaults/<name>
-vault-sync pull ~/Vaults/<name>
-vault-sync doctor ~/Vaults/<name>
+vault-sync init <your-vault-repo-url> ~/vaults/<name>
+vault-sync pull ~/vaults/<name>
+vault-sync doctor ~/vaults/<name>
 ```
 
 To keep the Vault fresh:
 
 ```bash
-vault-sync schedule install ~/Vaults/<name> --every 5m
+vault-sync schedule install ~/vaults/<name> --every 5m
 ```
 
 ## After Install
@@ -149,7 +149,7 @@ vault-sync schedule install ~/Vaults/<name> --every 5m
 Once the Vault is local, point the agent at the folder and say:
 
 ```text
-Use the local Vault in ~/Vaults/<name>. Read README.md first. Ignore hidden control folders like .git, .zine, .dossium, .graphlit, .claude, and .codex. Use normal file tools to search and read the Markdown files.
+Use the local Vault in ~/vaults/<name>. Read README.md first. Ignore hidden control folders like .git, .zine, .dossium, .graphlit, .claude, and .codex. Use normal file tools to search and read the Markdown files.
 ```
 
 The agent can use `ls`, `rg`, `sed`, `cat`, and native file reads. Vault Sync should only be used to initialize, pull, check status, schedule pulls, or run diagnostics.
@@ -165,8 +165,8 @@ The agent can use `ls`, `rg`, `sed`, `cat`, and native file reads. Vault Sync sh
 If QMD is installed, add the Vault folder as a collection:
 
 ```bash
-vault-sync pull ~/Vaults/<name>
-qmd collection add ~/Vaults/<name> --name <name> --mask "**/*.md"
+vault-sync pull ~/vaults/<name>
+qmd collection add ~/vaults/<name> --name <name> --mask "**/*.md"
 qmd context add qmd://<name> "Local Vault synced by Vault Sync"
 qmd embed
 ```
@@ -187,9 +187,9 @@ QMD is optional. Do not install or require it unless the user asks for a stronge
 After setup, run:
 
 ```bash
-vault-sync status ~/Vaults/<name>
-vault-sync doctor ~/Vaults/<name>
-rg -n "<known term>" ~/Vaults/<name>
+vault-sync status ~/vaults/<name>
+vault-sync doctor ~/vaults/<name>
+rg -n "<known term>" ~/vaults/<name>
 ```
 
 Expected result:

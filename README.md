@@ -51,7 +51,7 @@ Vault Sync currently supports:
 - Linux
 - WSL2 Ubuntu and similar WSL2 Linux distributions
 
-Native Windows PowerShell and Command Prompt usage are not currently supported. If you use Windows, run Vault Sync inside WSL2 and keep the Vault under the WSL filesystem, such as `~/Vaults/<name>`, especially when your AI tool also runs in WSL2.
+Native Windows PowerShell and Command Prompt usage are not currently supported. If you use Windows, run Vault Sync inside WSL2 and keep the Vault under the WSL filesystem, such as `~/vaults/<name>`, especially when your AI tool also runs in WSL2.
 
 ## Agent-First Install
 
@@ -102,7 +102,7 @@ install -m 0755 bin/vault-sync ~/.local/bin/vault-sync
 If `~/.local/bin` is not on your `PATH`, either add it or run the script directly from this checkout:
 
 ```bash
-bash bin/vault-sync status ~/Vaults/my-vault
+bash bin/vault-sync status ~/vaults/my-vault
 ```
 
 ## Quick Start
@@ -110,27 +110,27 @@ bash bin/vault-sync status ~/Vaults/my-vault
 Use the Vault repository URL from your app:
 
 ```bash
-vault-sync init <your-vault-repo-url> ~/Vaults/my-vault
-vault-sync pull ~/Vaults/my-vault
-vault-sync status ~/Vaults/my-vault
+vault-sync init <your-vault-repo-url> ~/vaults/my-vault
+vault-sync pull ~/vaults/my-vault
+vault-sync status ~/vaults/my-vault
 ```
 
 Then point your AI tool at the local folder:
 
 ```text
-~/Vaults/my-vault
+~/vaults/my-vault
 ```
 
 Ask your tool to inspect the Markdown files directly. For example, in Claude Code, Codex, OpenClaw, Cursor, or VS Code:
 
 ```text
-Use the local Vault in ~/Vaults/my-vault to answer this. Start by reading README.md, then search the Markdown files.
+Use the local Vault in ~/vaults/my-vault to answer this. Start by reading README.md, then search the Markdown files.
 ```
 
 You can also search the files yourself:
 
 ```bash
-rg -n "your search terms" ~/Vaults/my-vault
+rg -n "your search terms" ~/vaults/my-vault
 ```
 
 ## Commands
@@ -175,8 +175,8 @@ The workflow is simple: sync the Vault first, then let QMD search the local fold
 ```bash
 npm install -g @tobilu/qmd
 
-vault-sync pull ~/Vaults/my-vault
-qmd collection add ~/Vaults/my-vault --name my-vault --mask "**/*.md"
+vault-sync pull ~/vaults/my-vault
+qmd collection add ~/vaults/my-vault --name my-vault --mask "**/*.md"
 qmd context add qmd://my-vault "Local Vault synced by Vault Sync"
 qmd embed
 ```
@@ -195,19 +195,19 @@ QMD is not required. Vault Sync does not install, configure, or depend on QMD; i
 Pull updates manually:
 
 ```bash
-vault-sync pull ~/Vaults/my-vault
+vault-sync pull ~/vaults/my-vault
 ```
 
 Or install a recurring pull schedule:
 
 ```bash
-vault-sync schedule install ~/Vaults/my-vault --every 5m
+vault-sync schedule install ~/vaults/my-vault --every 5m
 ```
 
 Remove the schedule later:
 
 ```bash
-vault-sync schedule remove ~/Vaults/my-vault
+vault-sync schedule remove ~/vaults/my-vault
 ```
 
 ## Security
@@ -224,7 +224,7 @@ vault-sync schedule remove ~/Vaults/my-vault
 Run:
 
 ```bash
-vault-sync doctor ~/Vaults/my-vault
+vault-sync doctor ~/vaults/my-vault
 ```
 
 This checks for Git, repository health, local changes, remote reachability, optional `rg`, and scheduler state.

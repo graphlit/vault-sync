@@ -34,8 +34,8 @@ git clone https://github.com/graphlit/vault-sync
 cd vault-sync
 install -m 0755 bin/vault-sync ~/.local/bin/vault-sync
 
-vault-sync init <your-vault-repo-url> ~/Vaults/<name>
-vault-sync schedule install ~/Vaults/<name> --every 5m
+vault-sync init <your-vault-repo-url> ~/vaults/<name>
+vault-sync schedule install ~/vaults/<name> --every 5m
 ```
 
 After setup, Claude Code should read `README.md` in the local Vault first, ignore hidden control folders, and inspect Markdown files directly with normal filesystem tools. Treat the Vault as read-only unless you explicitly want local edits.

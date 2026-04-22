@@ -51,7 +51,7 @@ done
 if [[ -z "$path" ]]; then
   name="${repo_url##*/}"
   name="${name%.git}"
-  path="$HOME/Vaults/$name"
+  path="$HOME/vaults/$name"
 fi
 
 if ! command -v vault-sync >/dev/null 2>&1; then

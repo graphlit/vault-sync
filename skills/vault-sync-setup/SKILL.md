@@ -25,8 +25,9 @@ curl -fsSL https://raw.githubusercontent.com/graphlit/vault-sync/main/bin/vault-
 chmod +x ~/.local/bin/vault-sync
 ```
 
-4. Ask for the Vault Git repository URL and preferred local folder if missing. Default to `~/Vaults/<repo-name>`.
-5. Initialize and verify:
+4. Ask for the Vault Git repository URL and preferred local folder if missing. Use `~/vaults/<repo-name>` as the default.
+5. Do not infer the local Vault path from the current working directory, app name, or repository owner. Do not invent hidden app folders such as `~/.zine/vault`, `~/.dossium/vault`, or `~/.graphlit/vault`.
+6. Initialize and verify:
 
 ```bash
 vault-sync init <vault-repo-url> <path>
@@ -34,7 +35,7 @@ vault-sync pull <path>
 vault-sync doctor <path>
 ```
 
-6. Ask before installing a recurring schedule. If approved:
+7. Ask before installing a recurring schedule. If approved:
 
 ```bash
 vault-sync schedule install <path> --every 5m
