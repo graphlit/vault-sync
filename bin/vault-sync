@@ -1,0 +1,678 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+VERSION="0.1.0"
+APP_NAME="vault-sync"
+CONFIG_DIR="${VAULT_SYNC_CONFIG_DIR:-$HOME/.config/vault-sync}"
+STATE_DIR="$CONFIG_DIR/vaults"
+LOCK_DIR="$CONFIG_DIR/locks"
+SCHEDULE_DIR="$CONFIG_DIR/schedules"
+LOG_DIR="${VAULT_SYNC_LOG_DIR:-$CONFIG_DIR/logs}"
+ACTIVE_LOCK=""
+
+die() {
+  printf 'vault-sync: %s\n' "$*" >&2
+  exit 1
+}
+
+note() {
+  printf '%s\n' "$*"
+}
+
+usage() {
+  cat <<'EOF'
+vault-sync keeps an existing Vault Git repository mirrored onto the local filesystem.
+
+Usage:
+  vault-sync init <repo-url> [path]
+  vault-sync pull [path]
+  vault-sync status [path] [--json]
+  vault-sync schedule install [path] [--every 5m]
+  vault-sync schedule remove [path]
+  vault-sync doctor [path]
+  vault-sync version
+
+Vault Sync mirrors files only. It does not search, query, read, summarize, rank,
+index, call Graphlit APIs, create Vaults, or push changes.
+EOF
+}
+
+ensure_dirs() {
+  mkdir -p "$STATE_DIR" "$LOCK_DIR" "$SCHEDULE_DIR" "$LOG_DIR"
+}
+
+require_command() {
+  command -v "$1" >/dev/null 2>&1 || die "Required command [$1] was not found."
+}
+
+expand_path() {
+  case "${1:-}" in
+    "~") printf '%s\n' "$HOME" ;;
+    "~/"*) printf '%s/%s\n' "$HOME" "${1#~/}" ;;
+    "") printf '%s\n' "" ;;
+    *) printf '%s\n' "$1" ;;
+  esac
+}
+
+absolute_path() {
+  local raw parent base
+  raw="$(expand_path "$1")"
+  parent="$(dirname "$raw")"
+  base="$(basename "$raw")"
+  mkdir -p "$parent"
+  parent="$(cd "$parent" && pwd -P)"
+  printf '%s/%s\n' "$parent" "$base"
+}
+
+script_path() {
+  local source_dir
+  source_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+  printf '%s/%s\n' "$source_dir" "$(basename "${BASH_SOURCE[0]}")"
+}
+
+repo_name_from_url() {
+  local url name
+  url="${1%/}"
+  name="${url##*/}"
+  name="${name%.git}"
+  [[ -n "$name" ]] || die "Could not infer a repository name from [$1]."
+  printf '%s\n' "$name"
+}
+
+default_vault_path() {
+  printf '%s/Vaults/%s\n' "$HOME" "$(repo_name_from_url "$1")"
+}
+
+state_id_for_path() {
+  local path checksum base
+  path="$1"
+  checksum="$(printf '%s' "$path" | cksum | awk '{print $1}')"
+  base="$(basename "$path" | tr -c 'A-Za-z0-9._-' '_')"
+  printf '%s-%s\n' "$checksum" "$base"
+}
+
+state_file_for_path() {
+  printf '%s/%s.env\n' "$STATE_DIR" "$(state_id_for_path "$1")"
+}
+
+state_get() {
+  local path key file
+  path="$1"
+  key="$2"
+  file="$(state_file_for_path "$path")"
+  [[ -f "$file" ]] || return 0
+  awk -F= -v key="$key" '$1 == key { sub(/^[^=]*=/, ""); print; exit }' "$file"
+}
+
+state_set() {
+  local path key value file temp
+  path="$1"
+  key="$2"
+  value="$3"
+  ensure_dirs
+  file="$(state_file_for_path "$path")"
+  temp="$file.tmp.$$"
+  if [[ -f "$file" ]]; then
+    awk -F= -v key="$key" '$1 != key { print }' "$file" >"$temp"
+  else
+    : >"$temp"
+  fi
+  printf '%s=%s\n' "$key" "$value" >>"$temp"
+  mv "$temp" "$file"
+}
+
+state_paths() {
+  ensure_dirs
+  find "$STATE_DIR" -type f -name '*.env' -print 2>/dev/null | while IFS= read -r file; do
+    awk -F= '$1 == "path" { sub(/^[^=]*=/, ""); print; exit }' "$file"
+  done
+}
+
+normalize_remote() {
+  local remote
+  remote="${1%/}"
+  remote="${remote%.git}"
+  printf '%s\n' "$remote"
+}
+
+remote_matches() {
+  [[ "$(normalize_remote "$1")" == "$(normalize_remote "$2")" ]]
+}
+
+require_git_repo() {
+  local path="$1"
+  [[ -d "$path/.git" ]] || die "Path [$path] is not a Git repository."
+}
+
+worktree_dirty() {
+  local path="$1"
+  [[ -n "$(git -C "$path" status --porcelain)" ]]
+}
+
+markdown_count() {
+  local path="$1"
+  find "$path" -type f -name '*.md' \
+    ! -path '*/.git/*' \
+    ! -path '*/.zine/*' \
+    ! -path '*/.dossium/*' \
+    ! -path '*/.graphlit/*' \
+    2>/dev/null | wc -l | tr -d ' '
+}
+
+resolve_vault_path() {
+  local provided paths count path_line
+  provided="${1:-}"
+  if [[ -n "$provided" ]]; then
+    absolute_path "$provided"
+    return
+  fi
+
+  if [[ -d ".git" ]]; then
+    pwd -P
+    return
+  fi
+
+  paths=()
+  while IFS= read -r path_line; do
+    paths+=("$path_line")
+  done < <(state_paths)
+
+  count="${#paths[@]}"
+  if [[ "$count" -eq 1 ]]; then
+    printf '%s\n' "${paths[0]}"
+    return
+  fi
+
+  if [[ "$count" -gt 1 ]]; then
+    die "Multiple Vaults are configured. Pass a path explicitly."
+  fi
+
+  die "No Vault path was provided and no configured Vault was found."
+}
+
+json_escape() {
+  local value="$1"
+  value="${value//\\/\\\\}"
+  value="${value//\"/\\\"}"
+  value="${value//$'\n'/\\n}"
+  value="${value//$'\r'/\\r}"
+  printf '%s\n' "$value"
+}
+
+interval_to_seconds() {
+  local value number unit
+  value="${1:-5m}"
+  if [[ "$value" =~ ^([0-9]+)([smhd]?)$ ]]; then
+    number="${BASH_REMATCH[1]}"
+    unit="${BASH_REMATCH[2]:-s}"
+    case "$unit" in
+      s) printf '%s\n' "$number" ;;
+      m) printf '%s\n' "$((number * 60))" ;;
+      h) printf '%s\n' "$((number * 3600))" ;;
+      d) printf '%s\n' "$((number * 86400))" ;;
+      *) die "Unsupported interval [$value]." ;;
+    esac
+  else
+    die "Unsupported interval [$value]. Use values such as [5m], [30s], or [1h]."
+  fi
+}
+
+interval_to_cron_minutes() {
+  local seconds="$1"
+  if (( seconds < 60 )); then
+    die "Cron fallback requires an interval of at least 1 minute."
+  fi
+  if (( seconds % 60 != 0 )); then
+    die "Cron fallback requires a whole-minute interval."
+  fi
+  if (( seconds > 3540 )); then
+    die "Cron fallback supports intervals up to 59 minutes."
+  fi
+  printf '%s\n' "$((seconds / 60))"
+}
+
+schedule_id_for_path() {
+  printf 'vault-sync-%s\n' "$(state_id_for_path "$1")"
+}
+
+make_schedule_wrapper() {
+  local path interval_seconds id wrapper script jitter log script_arg path_arg log_arg
+  path="$1"
+  interval_seconds="$2"
+  id="$(schedule_id_for_path "$path")"
+  wrapper="$SCHEDULE_DIR/$id.sh"
+  script="$(script_path)"
+  jitter="$(( $(printf '%s' "$path" | cksum | awk '{print $1}') % 30 ))"
+  log="$LOG_DIR/$id.log"
+  printf -v script_arg '%q' "$script"
+  printf -v path_arg '%q' "$path"
+  printf -v log_arg '%q' "$log"
+
+  ensure_dirs
+  cat >"$wrapper" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+sleep "$jitter"
+exec $script_arg pull $path_arg >>$log_arg 2>&1
+EOF
+  chmod +x "$wrapper"
+  note "$wrapper"
+}
+
+install_launchd_schedule() {
+  local path interval_seconds id wrapper plist label
+  path="$1"
+  interval_seconds="$2"
+  id="$(schedule_id_for_path "$path")"
+  wrapper="$(make_schedule_wrapper "$path" "$interval_seconds")"
+  label="com.graphlit.$id"
+  plist="$HOME/Library/LaunchAgents/$label.plist"
+  mkdir -p "$HOME/Library/LaunchAgents"
+
+  cat >"$plist" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>$label</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>$wrapper</string>
+  </array>
+  <key>StartInterval</key>
+  <integer>$interval_seconds</integer>
+  <key>RunAtLoad</key>
+  <true/>
+</dict>
+</plist>
+EOF
+
+  launchctl unload "$plist" >/dev/null 2>&1 || true
+  launchctl load "$plist"
+  state_set "$path" scheduler "launchd"
+  state_set "$path" scheduler_id "$id"
+  note "Installed launchd schedule [$label] for [$path]."
+}
+
+systemd_user_available() {
+  command -v systemctl >/dev/null 2>&1 && systemctl --user status >/dev/null 2>&1
+}
+
+install_systemd_schedule() {
+  local path interval_seconds id wrapper unit timer unit_dir
+  path="$1"
+  interval_seconds="$2"
+  id="$(schedule_id_for_path "$path")"
+  wrapper="$(make_schedule_wrapper "$path" "$interval_seconds")"
+  unit_dir="$HOME/.config/systemd/user"
+  unit="$unit_dir/$id.service"
+  timer="$unit_dir/$id.timer"
+  mkdir -p "$unit_dir"
+
+  cat >"$unit" <<EOF
+[Unit]
+Description=Vault Sync pull for $path
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash $wrapper
+EOF
+
+  cat >"$timer" <<EOF
+[Unit]
+Description=Vault Sync timer for $path
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=${interval_seconds}s
+Unit=$id.service
+
+[Install]
+WantedBy=timers.target
+EOF
+
+  systemctl --user daemon-reload
+  systemctl --user enable --now "$id.timer"
+  state_set "$path" scheduler "systemd"
+  state_set "$path" scheduler_id "$id"
+  note "Installed systemd user timer [$id.timer] for [$path]."
+}
+
+install_cron_schedule() {
+  local path interval_seconds minutes id wrapper temp
+  path="$1"
+  interval_seconds="$2"
+  minutes="$(interval_to_cron_minutes "$interval_seconds")"
+  id="$(schedule_id_for_path "$path")"
+  wrapper="$(make_schedule_wrapper "$path" "$interval_seconds")"
+  temp="$(mktemp)"
+
+  if crontab -l >/dev/null 2>&1; then
+    crontab -l | grep -v "# $id\$" >"$temp" || true
+  else
+    : >"$temp"
+  fi
+
+  printf '*/%s * * * * /bin/bash %q # %s\n' "$minutes" "$wrapper" "$id" >>"$temp"
+  crontab "$temp"
+  rm -f "$temp"
+  state_set "$path" scheduler "cron"
+  state_set "$path" scheduler_id "$id"
+  note "Installed cron schedule [$id] for [$path]."
+}
+
+remove_launchd_schedule() {
+  local path id label plist
+  path="$1"
+  id="$(schedule_id_for_path "$path")"
+  label="com.graphlit.$id"
+  plist="$HOME/Library/LaunchAgents/$label.plist"
+  if [[ -f "$plist" ]]; then
+    launchctl unload "$plist" >/dev/null 2>&1 || true
+    rm -f "$plist"
+  fi
+}
+
+remove_systemd_schedule() {
+  local path id unit_dir
+  path="$1"
+  id="$(schedule_id_for_path "$path")"
+  unit_dir="$HOME/.config/systemd/user"
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl --user disable --now "$id.timer" >/dev/null 2>&1 || true
+  fi
+  rm -f "$unit_dir/$id.service" "$unit_dir/$id.timer"
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl --user daemon-reload >/dev/null 2>&1 || true
+  fi
+}
+
+remove_cron_schedule() {
+  local path id temp
+  path="$1"
+  id="$(schedule_id_for_path "$path")"
+  temp="$(mktemp)"
+  if crontab -l >/dev/null 2>&1; then
+    crontab -l | grep -v "# $id\$" >"$temp" || true
+    crontab "$temp"
+  fi
+  rm -f "$temp"
+}
+
+remove_schedule() {
+  local path id
+  path="$1"
+  id="$(schedule_id_for_path "$path")"
+  remove_launchd_schedule "$path"
+  remove_systemd_schedule "$path"
+  remove_cron_schedule "$path"
+  rm -f "$SCHEDULE_DIR/$id.sh"
+  state_set "$path" scheduler ""
+  state_set "$path" scheduler_id ""
+  note "Removed schedule for [$path]."
+}
+
+acquire_lock() {
+  local path id lock
+  path="$1"
+  ensure_dirs
+  id="$(state_id_for_path "$path")"
+  lock="$LOCK_DIR/$id.lock"
+  if ! mkdir "$lock" 2>/dev/null; then
+    die "Another vault-sync process is already running for [$path]."
+  fi
+  ACTIVE_LOCK="$lock"
+  trap 'rm -rf "$ACTIVE_LOCK"' EXIT
+}
+
+cmd_init() {
+  local repo_url path remote
+  repo_url="${1:-}"
+  [[ -n "$repo_url" ]] || die "Usage: vault-sync init <repo-url> [path]"
+  path="$(absolute_path "${2:-$(default_vault_path "$repo_url")}")"
+  require_command git
+  ensure_dirs
+
+  if [[ -d "$path/.git" ]]; then
+    remote="$(git -C "$path" config --get remote.origin.url || true)"
+    [[ -n "$remote" ]] || die "Existing repository [$path] has no origin remote."
+    remote_matches "$remote" "$repo_url" || die "Existing repository [$path] points at [$remote], not [$repo_url]."
+    note "Using existing Vault mirror [$path]."
+  else
+    if [[ -e "$path" ]] && [[ -n "$(find "$path" -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null)" ]]; then
+      die "Path [$path] exists and is not an empty Git repository."
+    fi
+    mkdir -p "$(dirname "$path")"
+    git clone "$repo_url" "$path"
+    note "Cloned Vault repository to [$path]."
+  fi
+
+  state_set "$path" path "$path"
+  state_set "$path" repo_url "$repo_url"
+  state_set "$path" initialized_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  note "Vault configured. Run [vault-sync pull \"$path\"] to refresh it."
+}
+
+cmd_pull() {
+  local path commit
+  path="$(resolve_vault_path "${1:-}")"
+  require_command git
+  require_git_repo "$path"
+  acquire_lock "$path"
+
+  if worktree_dirty "$path"; then
+    die "Refusing to pull because [$path] has local changes."
+  fi
+
+  git -C "$path" fetch --prune
+  git -C "$path" pull --ff-only
+  commit="$(git -C "$path" rev-parse HEAD)"
+  state_set "$path" path "$path"
+  state_set "$path" repo_url "$(git -C "$path" config --get remote.origin.url || true)"
+  state_set "$path" last_success "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  state_set "$path" last_commit "$commit"
+  note "Vault [$path] is current at [$commit]."
+}
+
+cmd_status() {
+  local path json remote branch commit dirty last_success scheduler count
+  json="false"
+  path=""
+  while [[ "$#" -gt 0 ]]; do
+    case "$1" in
+      --json) json="true" ;;
+      *) path="$1" ;;
+    esac
+    shift
+  done
+
+  path="$(resolve_vault_path "$path")"
+  require_git_repo "$path"
+  remote="$(git -C "$path" config --get remote.origin.url || true)"
+  branch="$(git -C "$path" symbolic-ref --short HEAD 2>/dev/null || git -C "$path" rev-parse --short HEAD)"
+  commit="$(git -C "$path" rev-parse HEAD)"
+  dirty="false"
+  worktree_dirty "$path" && dirty="true"
+  last_success="$(state_get "$path" last_success || true)"
+  scheduler="$(state_get "$path" scheduler || true)"
+  count="$(markdown_count "$path")"
+
+  if [[ "$json" == "true" ]]; then
+    printf '{\n'
+    printf '  "path": "%s",\n' "$(json_escape "$path")"
+    printf '  "remote": "%s",\n' "$(json_escape "$remote")"
+    printf '  "branch": "%s",\n' "$(json_escape "$branch")"
+    printf '  "commit": "%s",\n' "$(json_escape "$commit")"
+    printf '  "dirty": %s,\n' "$dirty"
+    printf '  "lastSuccessfulSync": "%s",\n' "$(json_escape "$last_success")"
+    printf '  "scheduler": "%s",\n' "$(json_escape "$scheduler")"
+    printf '  "markdownFileCount": %s\n' "$count"
+    printf '}\n'
+    return
+  fi
+
+  note "Path: $path"
+  note "Remote: $remote"
+  note "Branch: $branch"
+  note "Commit: $commit"
+  note "Dirty: $dirty"
+  note "Last successful sync: ${last_success:-never}"
+  note "Scheduler: ${scheduler:-not installed}"
+  note "Markdown files: $count"
+}
+
+cmd_schedule_install() {
+  local path interval interval_seconds os
+  path=""
+  interval="5m"
+  while [[ "$#" -gt 0 ]]; do
+    case "$1" in
+      --every)
+        shift
+        interval="${1:-}"
+        [[ -n "$interval" ]] || die "Missing value for [--every]."
+        ;;
+      *) path="$1" ;;
+    esac
+    shift
+  done
+
+  path="$(resolve_vault_path "$path")"
+  require_git_repo "$path"
+  interval_seconds="$(interval_to_seconds "$interval")"
+  os="$(uname -s)"
+
+  case "$os" in
+    Darwin)
+      require_command launchctl
+      install_launchd_schedule "$path" "$interval_seconds"
+      ;;
+    Linux)
+      if systemd_user_available; then
+        install_systemd_schedule "$path" "$interval_seconds"
+      else
+        require_command crontab
+        install_cron_schedule "$path" "$interval_seconds"
+      fi
+      ;;
+    *)
+      die "Unsupported platform [$os]. Use macOS, Linux, or WSL2."
+      ;;
+  esac
+}
+
+cmd_schedule_remove() {
+  local path
+  path="$(resolve_vault_path "${1:-}")"
+  remove_schedule "$path"
+}
+
+doctor_line() {
+  local level message
+  level="$1"
+  message="$2"
+  printf '[%s] %s\n' "$level" "$message"
+}
+
+cmd_doctor() {
+  local raw_path path failures remote os first_path
+  raw_path="${1:-}"
+  failures=0
+  os="$(uname -s)"
+
+  case "$os" in
+    Darwin|Linux) doctor_line OK "Platform [$os] is supported." ;;
+    *) doctor_line FAIL "Platform [$os] is unsupported. Use macOS, Linux, or WSL2."; failures=$((failures + 1)) ;;
+  esac
+
+  if command -v git >/dev/null 2>&1; then
+    doctor_line OK "git is installed."
+  else
+    doctor_line FAIL "git is required."
+    failures=$((failures + 1))
+  fi
+
+  if command -v rg >/dev/null 2>&1; then
+    doctor_line OK "rg is installed."
+  else
+    doctor_line WARN "rg is recommended for Vault consumption."
+  fi
+
+  if command -v gh >/dev/null 2>&1; then
+    doctor_line OK "gh is installed."
+  else
+    doctor_line WARN "gh is optional and only helps diagnose GitHub authentication."
+  fi
+
+  first_path="$(state_paths | head -n 1 || true)"
+  if [[ -n "$raw_path" ]] || [[ -d ".git" ]] || [[ -n "$first_path" ]]; then
+    path="$(resolve_vault_path "$raw_path")"
+    if [[ -d "$path/.git" ]]; then
+      doctor_line OK "Vault path [$path] is a Git repository."
+      if worktree_dirty "$path"; then
+        doctor_line FAIL "Vault path [$path] has local changes."
+        failures=$((failures + 1))
+      else
+        doctor_line OK "Vault worktree is clean."
+      fi
+      remote="$(git -C "$path" config --get remote.origin.url || true)"
+      if [[ -n "$remote" ]]; then
+        doctor_line OK "Origin remote is [$remote]."
+        if git ls-remote "$remote" HEAD >/dev/null 2>&1; then
+          doctor_line OK "Origin remote is reachable."
+        else
+          doctor_line WARN "Origin remote was not reachable from this environment."
+        fi
+      else
+        doctor_line FAIL "No origin remote configured."
+        failures=$((failures + 1))
+      fi
+      if [[ -n "$(state_get "$path" scheduler || true)" ]]; then
+        doctor_line OK "Scheduler is recorded as [$(state_get "$path" scheduler)]."
+      else
+        doctor_line WARN "No scheduler is recorded for this Vault."
+      fi
+    else
+      doctor_line WARN "Vault path [$path] does not exist yet or is not a Git repository."
+    fi
+  else
+    doctor_line WARN "No Vault path provided and no configured Vault was found."
+  fi
+
+  if [[ "$failures" -gt 0 ]]; then
+    exit 1
+  fi
+}
+
+main() {
+  local command="${1:-}"
+  if [[ -z "$command" ]]; then
+    usage
+    exit 1
+  fi
+  shift || true
+
+  case "$command" in
+    init) cmd_init "$@" ;;
+    pull) cmd_pull "$@" ;;
+    status) cmd_status "$@" ;;
+    schedule)
+      case "${1:-}" in
+        install) shift; cmd_schedule_install "$@" ;;
+        remove) shift; cmd_schedule_remove "$@" ;;
+        *) die "Usage: vault-sync schedule install|remove [path]" ;;
+      esac
+      ;;
+    doctor) cmd_doctor "$@" ;;
+    version|--version|-v) note "$APP_NAME $VERSION" ;;
+    help|--help|-h) usage ;;
+    search|query|read|summarize|rank|index)
+      die "[$command] is intentionally unsupported. Use filesystem tools such as [rg], [ls], [cat], and [sed]."
+      ;;
+    *) die "Unknown command [$command]. Run [vault-sync help]." ;;
+  esac
+}
+
+main "$@"
