@@ -205,6 +205,7 @@ This checks for Git, repository health, local changes, remote reachability, opti
 
 See:
 
+- [Agent Install Guide](docs/agent-install-guide.md)
 - [Claude Code](examples/install-claude-code.md)
 - [Codex](examples/install-codex.md)
 - [OpenClaw](examples/install-openclaw.md)
