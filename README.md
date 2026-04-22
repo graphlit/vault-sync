@@ -1,35 +1,101 @@
 # Vault Sync
 
-Vault Sync keeps a Graphlit Vault mirrored on your local filesystem so coding agents can read it with ordinary file tools.
+Vault Sync keeps a Zine or Dossium Vault synced to your computer.
 
-This repository is intentionally narrow. It is for consuming an existing Vault Git repository, not for creating or managing Vaults.
+A Vault is a Git repository of Markdown files: notes, source material, transcripts, summaries, observations, and other context exported from Zine or Dossium. Vault Sync keeps those files fresh locally so AI tools can read them without needing a live app connection.
+
+## Who It Helps
+
+Zine users can keep personal knowledge available to local AI tools:
+
+- students with lecture notes, readings, and research papers
+- researchers cross-referencing papers, citations, and notes
+- freelancers juggling client docs, project notes, and emails
+- homemakers organizing recipes, household docs, school info, and planning
+- job seekers tracking resumes, cover letters, postings, and interview prep
+- hobbyists and makers collecting tutorials, references, and project logs
+- writers working across drafts, research, notes, and source material
+
+Dossium users can keep team and business context available locally:
+
+- engineering and product teams reviewing incident context and feature history
+- account executives preparing for calls and relationship updates
+- support teams researching incidents, escalations, and account history
+- leaders preparing for board meetings, partner syncs, or investor updates
+- customer success teams preparing QBRs and account reviews
+- deal teams and investors reviewing diligence material and portfolio context
 
 ## What It Does
 
-- clones a Vault Git repository locally
-- pulls updates on demand or on a schedule
+- clones an existing Vault repository to your computer
+- pulls updates on demand
+- can install a recurring local pull schedule
 - reports sync status and local health
-- keeps the Vault ready for `ls`, `rg`, `cat`, `sed`, and native file reads
+- keeps the Vault ready for file-based AI tools
 
 ## What It Does Not Do
 
-- no Graphlit API calls
-- no search
-- no query
-- no read endpoint
-- no Vault creation
-- no replica management
-- no writing changes back to the Vault repository
+- does not create or manage your Vault
+- does not call back to Zine or Dossium
+- does not search, chat, summarize, rank, or index
+- does not edit generated Vault files
+- does not push changes back to the Vault repository
+
+Vault Sync is the mirror. Your AI tool is the reader.
 
 ## Supported Platforms
 
-Initial support is for:
+Vault Sync currently supports:
 
 - macOS
 - Linux
 - WSL2 Ubuntu and similar WSL2 Linux distributions
 
-Native Windows PowerShell and Command Prompt usage are out of scope for the first release. If you use Windows, run Vault Sync inside WSL2 and keep the Vault under the WSL filesystem, such as `~/Vaults/<name>`, especially when your coding agent also runs in WSL2.
+Native Windows PowerShell and Command Prompt usage are not currently supported. If you use Windows, run Vault Sync inside WSL2 and keep the Vault under the WSL filesystem, such as `~/Vaults/<name>`, especially when your AI tool also runs in WSL2.
+
+## Install
+
+Clone this repository and install the script somewhere on your `PATH`:
+
+```bash
+git clone https://github.com/graphlit/vault-sync
+cd vault-sync
+install -m 0755 bin/vault-sync ~/.local/bin/vault-sync
+```
+
+If `~/.local/bin` is not on your `PATH`, either add it or run the script directly from this checkout:
+
+```bash
+bash bin/vault-sync status ~/Vaults/my-vault
+```
+
+## Quick Start
+
+Use the Vault repository URL from Zine or Dossium:
+
+```bash
+vault-sync init <your-vault-repo-url> ~/Vaults/my-vault
+vault-sync pull ~/Vaults/my-vault
+vault-sync status ~/Vaults/my-vault
+```
+
+Then point your AI tool at the local folder:
+
+```text
+~/Vaults/my-vault
+```
+
+Ask your tool to inspect the Markdown files directly. For example, in Claude Code, Codex, OpenClaw, Cursor, or VS Code:
+
+```text
+Use the local Vault in ~/Vaults/my-vault to answer this. Start by reading README.md, then search the Markdown files.
+```
+
+You can also search the files yourself:
+
+```bash
+rg -n "your search terms" ~/Vaults/my-vault
+```
 
 ## Commands
 
@@ -42,32 +108,11 @@ vault-sync schedule remove [path]
 vault-sync doctor [path]
 ```
 
-The command surface stays small on purpose. Search and reading are handled by your agent's own filesystem tools.
+The command surface is intentionally small. Search and reading are handled by your AI tool's normal file access.
 
-## Quick Start
+## Working With AI Tools
 
-```bash
-git clone https://github.com/graphlit/vault-sync
-cd vault-sync
-install -m 0755 bin/vault-sync ~/.local/bin/vault-sync
-
-vault-sync init <vault-repo-url> ~/Vaults/my-vault
-vault-sync pull ~/Vaults/my-vault
-vault-sync status ~/Vaults/my-vault
-rg -n "your search terms" ~/Vaults/my-vault
-```
-
-If you are running directly from a checkout without installing it into your `PATH`, use:
-
-```bash
-bash bin/vault-sync status ~/Vaults/my-vault
-```
-
-## How Agents Use It
-
-Vault Sync is the mirror. Your agent is the reader.
-
-Use the local Vault with tools you already trust:
+Vault Sync works well with file-aware tools such as:
 
 - Claude Code
 - Codex
@@ -75,15 +120,58 @@ Use the local Vault with tools you already trust:
 - Cursor
 - VS Code
 
-Agent workflows should read `README.md` first, then inspect Markdown files directly with normal filesystem commands.
+Suggested prompt:
+
+```text
+The Vault is a local folder of Markdown files. Read README.md first. Ignore hidden control folders like .git, .zine, .dossium, .graphlit, .claude, and .codex. Use normal file tools to search and read the Markdown files.
+```
+
+## Keeping It Fresh
+
+Pull updates manually:
+
+```bash
+vault-sync pull ~/Vaults/my-vault
+```
+
+Or install a recurring pull schedule:
+
+```bash
+vault-sync schedule install ~/Vaults/my-vault --every 5m
+```
+
+Remove the schedule later:
+
+```bash
+vault-sync schedule remove ~/Vaults/my-vault
+```
 
 ## Security
 
-- plain Bash scripts
-- no opaque binaries required
+- plain Bash script
+- no opaque binary
 - no credentials stored by Vault Sync
-- Git auth stays in the user's existing Git or GitHub CLI setup
+- Git authentication stays in your existing Git or GitHub setup
 - scheduled jobs only run `vault-sync pull <path>`
+- local Vault files are not uploaded by this tool
+
+## Troubleshooting
+
+Run:
+
+```bash
+vault-sync doctor ~/Vaults/my-vault
+```
+
+This checks for Git, repository health, local changes, remote reachability, optional `rg`, and scheduler state.
+
+## Agent Install Notes
+
+See:
+
+- [Claude Code](examples/install-claude-code.md)
+- [Codex](examples/install-codex.md)
+- [OpenClaw](examples/install-openclaw.md)
 
 ## Development
 
@@ -94,15 +182,3 @@ bash tests/smoke.sh
 ```
 
 The test creates a temporary local Git repository and does not touch your real Vaults.
-
-## Install
-
-See the platform-specific examples:
-
-- [Claude Code](examples/install-claude-code.md)
-- [Codex](examples/install-codex.md)
-- [OpenClaw](examples/install-openclaw.md)
-
-## Notes
-
-The Vault itself is just files. For larger Vaults, users can optionally add their own local indexing layer on top of the mirrored folder, but that is outside this repository's scope.
