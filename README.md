@@ -83,10 +83,10 @@ https://www.zine.ai/skill.md
 https://www.dossium.ai/skill.md
 ```
 
-Codex can also consume this repository as a plugin marketplace:
+Codex CLI `0.121.0` or newer can also consume this repository as a plugin marketplace:
 
 ```bash
-codex plugin marketplace add graphlit/vault-sync
+codex marketplace add graphlit/vault-sync
 ```
 
 ## Install

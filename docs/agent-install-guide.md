@@ -17,7 +17,7 @@ Use the most native install path your agent supports:
 
 | Agent | Recommended path | Fallback |
 |---|---|---|
-| Codex | Plugin marketplace | Skills or manual CLI |
+| Codex | Plugin marketplace in Codex CLI `0.121.0` or newer | Skills or manual CLI |
 | Claude Code | Agent skills | Direct skill URL or manual CLI |
 | OpenClaw | Agent skills or direct skill URL | Manual CLI |
 
@@ -27,10 +27,12 @@ The agent should set up the local mirror, then use normal filesystem tools to re
 
 ### Plugin Marketplace
 
+This path requires Codex CLI `0.121.0` or newer.
+
 Add the Vault Sync marketplace:
 
 ```bash
-codex plugin marketplace add graphlit/vault-sync
+codex marketplace add graphlit/vault-sync
 ```
 
 Then ask Codex:
@@ -43,7 +45,7 @@ Codex should install `vault-sync`, initialize the local folder, run `vault-sync 
 
 ### Skills Fallback
 
-If plugin marketplace support is not available, install the skills directly:
+If plugin marketplace support is not available in your Codex CLI version, install the skills directly:
 
 ```bash
 npx skills add graphlit/vault-sync --skill vault-sync-setup

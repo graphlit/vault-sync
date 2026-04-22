@@ -4,10 +4,12 @@ Use this when a Vault already exists in Git and Codex can access your local file
 
 ## Preferred: Codex Plugin Marketplace
 
+This path requires Codex CLI `0.121.0` or newer.
+
 Add the Vault Sync marketplace:
 
 ```bash
-codex plugin marketplace add graphlit/vault-sync
+codex marketplace add graphlit/vault-sync
 ```
 
 Then ask Codex:
@@ -20,7 +22,7 @@ Codex should install `vault-sync`, initialize the local folder, run `vault-sync 
 
 ## Skill Fallback
 
-If plugin marketplace support is not available, install the skills directly:
+If plugin marketplace support is not available in your Codex CLI version, install the skills directly:
 
 ```bash
 npx skills add graphlit/vault-sync --skill vault-sync-setup
